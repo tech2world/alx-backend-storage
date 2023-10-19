@@ -1,3 +1,12 @@
+#!/usr/bin/env python3
+"""
+Create a Cache class. In the __init__ method, store an instance of the Redis
+client as a private variable named _redis (using redis.Redis()) and flush
+the instance using flushdb.
+
+"""
+
+
 import redis
 import uuid
 from typing import Callable, Union
@@ -47,6 +56,27 @@ def call_history(method: Callable) -> Callable:
     return wrapper
 
 
+def replay(self, method: Callable):
+    """
+    Displays the history of calls of a particular function.
+
+    Args:
+        method (Callable): The method for which the history
+        of calls is to be displayed.
+    """
+    inputs_key = "{}:inputs".format(method.__qualname__)
+    outputs_key = "{}:outputs".format(method.__qualname__)
+
+    inputs = self._redis.lrange(inputs_key, 0, -1)
+    outputs = self._redis.lrange(outputs_key, 0, -1)
+
+    print(f"{method.__qualname__} was called {len(inputs)} times:")
+    for args, output in zip(inputs, outputs):
+        print(
+            f"{method.__qualname__}{args.decode('utf-8')} -> \
+                    {output.decode('utf-8')}")
+
+
 class Cache:
     """
     A class representing a simple cache utilizing Redis.
@@ -59,6 +89,7 @@ class Cache:
         self._redis = redis.Redis()
         self._redis.flushdb()
 
+    @call_history
     @count_calls
     def store(self, data: Union[str, bytes, int, float]) -> str:
         """
@@ -94,26 +125,6 @@ class Cache:
         if data is not None and fn is not None:
             return fn(data)
         return data
-
-    def replay(self, method: Callable):
-        """
-        Displays the history of calls of a particular function.
-
-        Args:
-            method (Callable): The method for which the history
-            of calls is to be displayed.
-        """
-        inputs_key = "{}:inputs".format(method.__qualname__)
-        outputs_key = "{}:outputs".format(method.__qualname__)
-
-        inputs = self._redis.lrange(inputs_key, 0, -1)
-        outputs = self._redis.lrange(outputs_key, 0, -1)
-
-        print(f"{method.__qualname__} was called {len(inputs)} times:")
-        for args, output in zip(inputs, outputs):
-            print(
-                f"{method.__qualname__}{args.decode('utf-8')} -> \
-                    {output.decode('utf-8')}")
 
     def get_str(self, key: str) -> Union[str, bytes, None]:
         """
